@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
@@ -38,7 +39,11 @@ import java.util.Set;
 import javax.xml.bind.JAXBException;
 import javax.xml.stream.XMLStreamException;
 
+import org.apache.felix.utils.manifest.Attribute;
+import org.apache.felix.utils.manifest.Clause;
+import org.apache.felix.utils.manifest.Directive;
 import org.apache.felix.utils.properties.Properties;
+import org.apache.felix.utils.version.VersionRange;
 import org.apache.karaf.features.BundleInfo;
 import org.apache.karaf.features.Dependency;
 import org.apache.karaf.features.FeaturesService;
@@ -54,6 +59,7 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.osgi.framework.Constants;
 
 /**
  * Installs kar dependencies into a server-under-construction in target/assembly
@@ -255,6 +261,11 @@ public class InstallKarsMojo extends MojoSupport {
             for (Conditional cond : feature.getConditional()) {
                 bundles.addAll(cond.getBundle());
             }
+
+			// lookup for features defined in the features that are in the featureSet
+			Set<Feature> copiedFeatureSet = new LinkedHashSet<Feature>(featureSet);
+            lookupInnerFeatures(feature, bundles, copiedFeatureSet);
+
             for (Bundle bundle : bundles) {
                 String key = bundle.getLocation();
                 // remove wrap: protocol to resolve from maven
@@ -306,6 +317,29 @@ public class InstallKarsMojo extends MojoSupport {
         }
     }
 
+    
+    private void lookupInnerFeatures(Feature feature, List<Bundle> bundles, Set<Feature> copiedFeatureSet) {
+        for (Dependency innerFeature : feature.getFeature()) {
+            getLog().debug("The bundle has inner features: " + innerFeature.getName()+":"+innerFeature.getVersion());
+            
+            for (Feature lookupFeature : copiedFeatureSet) {
+                
+                if (lookupFeature.getName().equals(innerFeature.getName())) {
+                    if (lookupFeature.getVersion().equals(innerFeature.getVersion())) {
+                        getLog().info("Found inner feature in featureSet: "+lookupFeature.getName()+":"+lookupFeature.getVersion());
+                        
+                        bundles.addAll(lookupFeature.getBundle());
+                    }
+                    
+                    Set<Feature> innerCopiedFeatureSet = new LinkedHashSet<Feature>(copiedFeatureSet);
+                    
+                    // lookup inner features
+                    lookupInnerFeatures(lookupFeature, bundles, innerCopiedFeatureSet);
+                }
+            }
+        }
+    }
+	
     private void install(String key, File target) throws MojoFailureException {
         File source = this.dependencyHelper.resolveById(key, getLog());
         target.getParentFile().mkdirs();
@@ -397,7 +431,8 @@ public class InstallKarsMojo extends MojoSupport {
             }
             Features features = readFeatures(repositoryTargetInSystemRepository.toURI());
             for (String innerRepository : features.getRepository()) {
-                loadAndCopyRepo(URI.create(innerRepository));
+                Features innerFeatures = loadAndCopyRepo(URI.create(innerRepository));
+                features.getFeature().addAll(innerFeatures.getFeature());
             }
             return features;
         }
@@ -473,9 +508,18 @@ public class InstallKarsMojo extends MojoSupport {
             if (!feature.getName().equals(dependency.getName())) {
                 return false;
             }
+            if (feature.getVersion() != null) {
+                VersionRange vr = new VersionRange(feature.getVersion(), true);
+                boolean matches = ManifestUtils.matches(clause(feature.getName(), vr.toString()), clause(dependency.getName(), dependency.getVersion()));
+                return matches;
+            }
             return true;
         }
 
+        private Clause clause(String name, String version) {
+            Attribute[] attribute = {new Attribute(Constants.VERSION_ATTRIBUTE, version)};
+            return new Clause(name, new Directive[0], attribute);
+        }
     }
 
 }
