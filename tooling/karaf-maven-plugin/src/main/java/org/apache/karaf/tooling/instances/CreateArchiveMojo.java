@@ -68,6 +68,22 @@ public class CreateArchiveMojo extends MojoSupport {
      * @required
      */
     private File targetFile;
+	
+    /**
+     * The base name, used when creating the archive, for the contained directory.
+     *
+     * @parameter default-value="${project.artifactId}-${project.version}"
+     * @required
+     */
+    private String baseName;
+
+    /**
+     * The archive file name
+     *
+     * @parameter default-value="${project.artifactId}-${project.version}"
+     * @required
+     */
+    private String finalName;
 
     /**
      * pack a assembly as a tar.gz archive
@@ -109,8 +125,7 @@ public class CreateArchiveMojo extends MojoSupport {
 
     public File archive(File source, File dest, Artifact artifact) throws //ArchiverException,
             IOException {
-        String serverName = artifact.getArtifactId() + "-" + artifact.getVersion();
-        dest = new File(dest, serverName + "." + artifact.getType());
+        dest = new File(dest, finalName + "." + artifact.getType());
         Project project = new Project();
         MatchingTask archiver;
         if ("tar.gz".equals(artifact.getType())) {
@@ -124,14 +139,14 @@ public class CreateArchiveMojo extends MojoSupport {
             tar.setDestFile(dest);
             TarFileSet rc = new TarFileSet();
             rc.setDir(source);
-            rc.setPrefix(serverName);
+            rc.setPrefix(baseName);
             rc.setProject(project);
             rc.setExcludes("bin/");
             tar.add(rc);
 
             rc = new TarFileSet();
             rc.setDir(source);
-            rc.setPrefix(serverName);
+            rc.setPrefix(baseName);
             rc.setProject(project);
             rc.setIncludes("bin/");
             rc.setExcludes("bin/*.bat");
@@ -140,7 +155,7 @@ public class CreateArchiveMojo extends MojoSupport {
 
             rc = new TarFileSet();
             rc.setDir(source);
-            rc.setPrefix(serverName);
+            rc.setPrefix(baseName);
             rc.setProject(project);
             rc.setIncludes("bin/*.bat");
             tar.add(rc);
@@ -149,7 +164,7 @@ public class CreateArchiveMojo extends MojoSupport {
                 File resourceFile = new File(resource.getDirectory());
                 if (resourceFile.exists()) {
                     rc = new TarFileSet();
-                    rc.setPrefix(serverName);
+                    rc.setPrefix(baseName);
                     rc.setProject(project);
                     rc.setDir(resourceFile);
                     rc.appendIncludes(resource.getIncludes().toArray(new String[0]));
@@ -164,14 +179,14 @@ public class CreateArchiveMojo extends MojoSupport {
             zip.setDestFile(dest);
             ZipFileSet fs = new ZipFileSet();
             fs.setDir(source);
-            fs.setPrefix(serverName);
+            fs.setPrefix(baseName);
             fs.setProject(project);
             fs.setExcludes("bin/");
             zip.addFileset(fs);
 
             fs = new ZipFileSet();
             fs.setDir(source);
-            fs.setPrefix(serverName);
+            fs.setPrefix(baseName);
             fs.setProject(project);
             fs.setIncludes("bin/");
             fs.setExcludes("bin/*.bat");
@@ -180,7 +195,7 @@ public class CreateArchiveMojo extends MojoSupport {
 
             fs = new ZipFileSet();
             fs.setDir(source);
-            fs.setPrefix(serverName);
+            fs.setPrefix(baseName);
             fs.setProject(project);
             fs.setIncludes("bin/*.bat");
             zip.add(fs);
@@ -189,7 +204,7 @@ public class CreateArchiveMojo extends MojoSupport {
                 File resourceFile = new File(resource.getDirectory());
                 if (resourceFile.exists()) {
                     fs = new ZipFileSet();
-                    fs.setPrefix(serverName);
+                    fs.setPrefix(baseName);
                     fs.setProject(project);
                     fs.setDir(resourceFile);
                     fs.appendIncludes(resource.getIncludes().toArray(new String[0]));
